@@ -23,10 +23,11 @@ class GameBoard extends StatefulWidget {
 class _GameBoardState extends State<GameBoard> {
   // current tetris piece
   Piece currentPiece = Piece(type: Tetromino.L);
+  int currentScore = 0;
+  bool gameOver = false;
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     // start the game
     startGame();
@@ -34,17 +35,56 @@ class _GameBoardState extends State<GameBoard> {
 
   void startGame() {
     currentPiece.initializePiece();
-    Duration frameRate = const Duration(milliseconds: 800);
+    Duration frameRate = const Duration(milliseconds: 200);
     gameLoop(frameRate);
   }
 
   void gameLoop(Duration frameRate) {
     Timer.periodic(frameRate, (timer) {
       setState(() {
+        clearLines();
         checkLanding();
+        if (gameOver == true) {
+          timer.cancel();
+          showGameOverDialog();
+        }
         currentPiece.movePiece(Direction.down);
       });
     });
+  }
+
+  void showGameOverDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Game over"),
+        content: Text("Your score si : $currentScore"),
+        actions: [
+          TextButton(
+              onPressed: () {
+                resetGame();
+                Navigator.pop(context);
+              },
+              child: const Text("Play Again"))
+        ],
+      ),
+    );
+  }
+
+  void resetGame() {
+    gameBoard = List.generate(
+      colLength,
+      (i) => List.generate(
+        rowLength,
+        (j) => null,
+      ),
+    );
+
+    gameOver = false;
+    currentScore = 0;
+
+    createNewPice();
+    startGame();
   }
 
   // check for collision detection
@@ -52,7 +92,7 @@ class _GameBoardState extends State<GameBoard> {
   // return false for no collision
 
   bool checkCollision(Direction direction) {
-    for (var i = 0; i < currentPiece.position.length; i++) {
+    for (int i = 0; i < currentPiece.position.length; i++) {
       int row = (currentPiece.position[i] / rowLength).floor();
       int col = currentPiece.position[i] % rowLength;
 
@@ -64,9 +104,14 @@ class _GameBoardState extends State<GameBoard> {
         row += 1;
       }
 
-      // check if piece out of bounch
-      if (row >= colLength || col < 0 || col >= rowLength) {
+      if (col < 0 || row >= colLength || col < 0 || col >= rowLength) {
         return true;
+      }
+
+      if (row >= 0 && col >= 0) {
+        if (gameBoard[row][col] != null) {
+          return true;
+        }
       }
     }
     return false;
@@ -77,14 +122,12 @@ class _GameBoardState extends State<GameBoard> {
       for (int i = 0; i < currentPiece.position.length; i++) {
         int row = (currentPiece.position[i] / rowLength).floor();
         int col = currentPiece.position[i] % rowLength;
-
         if (row >= 0 && col >= 0) {
           gameBoard[row][col] = currentPiece.type;
         }
       }
       createNewPice();
     }
-    // once landed, create a new piece
   }
 
   void createNewPice() {
@@ -95,6 +138,10 @@ class _GameBoardState extends State<GameBoard> {
         Tetromino.values[rand.nextInt(Tetromino.values.length)];
     currentPiece = Piece(type: randomtype);
     currentPiece.initializePiece();
+
+    if (isGameOver()) {
+      gameOver = true;
+    }
   }
 
   void moveLeft() {
@@ -113,7 +160,42 @@ class _GameBoardState extends State<GameBoard> {
     }
   }
 
-  void moveRotate() {}
+  void rotatePiece() {
+    setState(() {
+      currentPiece.rotatePiece();
+    });
+  }
+
+  void clearLines() {
+    for (int row = colLength - 1; row >= 0; row--) {
+      bool rowIsFull = true;
+
+      for (int col = 0; col < rowLength; col++) {
+        if (gameBoard[row][col] == null) {
+          rowIsFull = false;
+          break;
+        }
+      }
+
+      if (rowIsFull) {
+        for (int r = row; r > 0; r--) {
+          gameBoard[r] = List.from(gameBoard[r - 1]);
+        }
+        gameBoard[0] = List.generate(row, (index) => null);
+
+        currentScore++;
+      }
+    }
+  }
+
+  bool isGameOver() {
+    for (int col = 0; col < rowLength; col++) {
+      if (gameBoard[0][col] != null) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,7 +218,7 @@ class _GameBoardState extends State<GameBoard> {
                   if (currentPiece.position.contains(index)) {
                     return Pixel(
                       color: currentPiece.color,
-                      child: index,
+                      // child: index,
                     );
                   }
 
@@ -144,17 +226,22 @@ class _GameBoardState extends State<GameBoard> {
                   else if (gameBoard[row][col] != null) {
                     final Tetromino? tetrominoType = gameBoard[row][col];
                     return Pixel(
-                        color: tetrominoColors[tetrominoType], child: '');
+                      color: tetrominoColors[tetrominoType],
+                    );
                   }
 
                   //blank pixels
                   else {
                     return Pixel(
                       color: Colors.grey[900],
-                      child: index,
+                      // child: index,
                     );
                   }
                 }),
+          ),
+          Text(
+            "Score: $currentScore",
+            style: const TextStyle(color: Colors.white),
           ),
           // game controls
           Padding(
@@ -166,19 +253,19 @@ class _GameBoardState extends State<GameBoard> {
                 IconButton(
                   onPressed: moveLeft,
                   color: Colors.white,
-                  icon: Icon(Icons.arrow_back),
+                  icon: const Icon(Icons.arrow_back),
                 ),
                 //rotate
                 IconButton(
-                  onPressed: moveRotate,
+                  onPressed: rotatePiece,
                   color: Colors.white,
-                  icon: Icon(Icons.rotate_right),
+                  icon: const Icon(Icons.rotate_right),
                 ),
                 //right
                 IconButton(
                   onPressed: moveRight,
                   color: Colors.white,
-                  icon: Icon(Icons.arrow_right),
+                  icon: const Icon(Icons.arrow_forward),
                 ),
               ],
             ),
